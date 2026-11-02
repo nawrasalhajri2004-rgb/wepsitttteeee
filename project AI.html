@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام التنبؤ الهيدرولوجي بمخاطر السيول والفيضانات - Flood Risk Dashboard</title>
+    <!-- خط القاهرة + Chart.js للرسوم البيانية -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #38bdf8;
+            --accent-green: #22c55e;
+            --accent-yellow: #eab308;
+            --accent-orange: #f97316;
+            --accent-red: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Cairo', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.12) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(30, 58, 138, 0.2) 0px, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            padding: 20px 30px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+        }
+
+        header h1 {
+            font-size: 1.6rem;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 15px 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(8px);
+        }
+
+        .stat-card .label { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 5px; }
+        .stat-card .value { font-size: 1.5rem; font-weight: 700; color: var(--accent-blue); }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 25px;
+        }
+
+        @media (max-width: 1024px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 25px;
+            backdrop-filter: blur(12px);
+            margin-bottom: 25px;
+        }
+
+        .card h2 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            color: #38bdf8;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            color: #e2e8f0;
+        }
+
+        .control-group label span {
+            font-weight: bold;
+            color: var(--accent-blue);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: #334155;
+            border-radius: 5px;
+            outline: none;
+            accent-color: var(--accent-blue);
+            cursor: pointer;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            background: #0f172a;
+            border: 1px solid var(--border-color);
+            color: #fff;
+            border-radius: 8px;
+            outline: none;
+        }
+
+        .preset-btns {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .preset-btn {
+            flex: 1;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: 0.2s;
+        }
+
+        .preset-btn:hover {
+            background: rgba(56, 189, 248, 0.2);
+            border-color: var(--accent-blue);
+        }
+
+        .gauge-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .gauge-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-top: -30px;
+        }
+
+        .alert-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .badge-low { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
+        .badge-moderate { background: rgba(234, 179, 8, 0.2); color: var(--accent-yellow); border: 1px solid var(--accent-yellow); }
+        .badge-high { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); border: 1px solid var(--accent-orange); }
+        .badge-critical { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); border: 1px solid var(--accent-red); }
+
+        .simulator-box {
+            height: 160px;
+            background: #090d16;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            margin-top: 15px;
+        }
+
+        .water-layer {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 10%;
+            background: linear-gradient(180deg, rgba(56, 189, 248, 0.7) 0%, rgba(30, 58, 138, 0.9) 100%);
+            transition: height 0.4s ease;
+        }
+
+        .basin-shape {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 120%, transparent 60%, #1e293b 61%);
+            pointer-events: none;
+        }
+
+        .recommendation-box {
+            background: rgba(255, 255, 255, 0.03);
+            border-right: 4px solid var(--accent-blue);
+            padding: 15px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        @media print {
+            .preset-btns, input, select { display: none; }
+            body { background: white; color: black; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>🌧️ نظام التنبؤ الهيدرولوجي بمخاطر السيول والفيضانات</h1>
+            <button onclick="window.print()" class="preset-btn" style="max-width: 120px;">🖨️ طباعة التقرير</button>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="label">إجمالي الأمطار المتوقعة</div>
+                <div class="value" id="statRain">0 ملم</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">معامل الجريان السطحي (C)</div>
+                <div class="value" id="statRunoff">0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">ذروة التدفق المتوقعة</div>
+                <div class="value" id="statPeak">0 م³/ثانية</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">وقت استجابة الوادي/المجرى</div>
+                <div class="value" id="statTime">0 ساعة</div>
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <div class="controls-column">
+                <div class="card">
+                    <h2>⚙️ مدخلات المحاكاة المناخية</h2>
+                    
+                    <div class="preset-btns">
+                        <button class="preset-btn" onclick="applyPreset('light')">مطر خفيف</button>
+                        <button class="preset-btn" onclick="applyPreset('urban')">عاصفة مدنية</button>
+                        <button class="preset-btn" onclick="applyPreset('flash')">سيول جارفة</button>
+                    </div>
+
+                    <div class="control-group">
+                        <label>غزارة الأمطار: <span id="rainVal">45 ملم/س</span></label>
+                        <input type="range" id="rain" min="0" max="200" value="45">
+                    </div>
+
+                    <div class="control-group">
+                        <label>مدة العاصفة: <span id="durationVal">3 ساعات</span></label>
+                        <input type="range" id="duration" min="1" max="48" value="3">
+                    </div>
+
+                    <div class="control-group">
+                        <label>تشبع التربة بالماء: <span id="soilVal">65%</span></label>
+                        <input type="range" id="soil" min="0" max="100" value="65">
+                    </div>
+
+                    <div class="control-group">
+                        <label>انحدار الأرض والتضاريس</label>
+                        <select id="slope">
+                            <option value="0.8">سهول ومناطق منبسطة (منخفض)</option>
+                            <option value="1.2" selected>تلال وهضاب (متوسط)</option>
+                            <option value="1.6">مناطق جبلية شاهقة (منحدر جداً)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label>نوع السطح وبنية التصريف</label>
+                        <select id="drainage">
+                            <option value="0.6">مدينة / خرسانة (تصريف ضعيف)</option>
+                            <option value="1.0" selected>تربة عادية / مناطق زراعية</option>
+                            <option value="1.5">غابات كثيفة / أراضي رملية (امتصاص عالٍ)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="display-column">
+                <div style="display: grid; grid-template-columns: 280px 1fr; gap: 20px;">
+                    <div class="card gauge-container">
+                        <h2>مؤشر الخطر الإجمالي</h2>
+                        <svg width="200" height="120" viewBox="0 0 200 120">
+                            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#334155" stroke-width="16" stroke-linecap="round"/>
+                            <path id="gaugeArc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#38bdf8" stroke-width="16" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="251" style="transition: stroke-dashoffset 0.5s ease, stroke 0.5s ease;"/>
+                        </svg>
+                        <div class="gauge-value" id="riskPercent">0%</div>
+                        <div class="alert-badge badge-low" id="alertBadge">آمن - منخفض</div>
+                    </div>
+
+                    <div class="card">
+                        <h2>🌊 محاكي ارتفاع المنسوب المائي في الوادي</h2>
+                        <div class="simulator-box">
+                            <div class="water-layer" id="waterLayer"></div>
+                            <div class="basin-shape"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>📊 منحنى الجريان السطحي والامتصاص عبر الزمن (Hydrograph)</h2>
+                    <div style="height: 250px;">
+                        <canvas id="hydroChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>⚠️ الإرشادات وتوصيات السلامة</h2>
+                    <div class="recommendation-box" id="recommendationText">
+                        جاري تحليل البيانات...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('hydroChart').getContext('2d');
+        const hydroChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['1س', '2س', '3س', '4س', '5س', '6س', '7س', '8س'],
+                datasets: [
+                    {
+                        label: 'معدل الجريان السطحي (م³/ث)',
+                        data: [0, 0, 0, 0, 0, 0, 0, 0],
+                        borderColor: '#38bdf8',
+                        backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'قدرة استيعاب التربة',
+                        data: [0, 0, 0, 0, 0, 0, 0, 0],
+                        borderColor: '#22c55e',
+                        borderDash: [5, 5],
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: '#94a3b8' } } },
+                scales: {
+                    x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                }
+            }
+        });
+
+        function updateModel() {
+            const rain = parseFloat(document.getElementById('rain').value);
+            const duration = parseFloat(document.getElementById('duration').value);
+            const soil = parseFloat(document.getElementById('soil').value);
+            const slope = parseFloat(document.getElementById('slope').value);
+            const drainage = parseFloat(document.getElementById('drainage').value);
+
+            document.getElementById('rainVal').innerText = rain + ' ملم/س';
+            document.getElementById('durationVal').innerText = duration + ' ساعات';
+            document.getElementById('soilVal').innerText = soil + '%';
+
+            const totalRain = rain * duration;
+            const absorption = Math.max(5, (100 - soil) * parseFloat(drainage));
+            const runoffCoeff = Math.min(0.95, Math.max(0.1, (soil / 100) * (1.8 - drainage)));
+            const peakFlow = Math.round((rain * runoffCoeff * slope * 12.5));
+            const responseTime = (4 / slope).toFixed(1);
+
+            const rawRisk = (totalRain * runoffCoeff * slope) / 2.2;
+            const risk = Math.min(100, Math.max(0, Math.round(rawRisk)));
+
+            document.getElementById('statRain').innerText = totalRain + ' ملم';
+            document.getElementById('statRunoff').innerText = runoffCoeff.toFixed(2);
+            document.getElementById('statPeak').innerText = peakFlow + ' م³/ثانية';
+            document.getElementById('statTime').innerText = responseTime + ' ساعة';
+
+            document.getElementById('riskPercent').innerText = risk + '%';
+            const arc = document.getElementById('gaugeArc');
+            const offset = 251 - (251 * (risk / 100));
+            arc.style.strokeDashoffset = offset;
+
+            document.getElementById('waterLayer').style.height = Math.min(95, Math.max(5, risk)) + '%';
+
+            const badge = document.getElementById('alertBadge');
+            const rec = document.getElementById('recommendationText');
+            let color = '#22c55e';
+
+            if (risk < 25) {
+                badge.innerText = '🟢 آمن - منخفض';
+                badge.className = 'alert-badge badge-low';
+                color = '#22c55e';
+                rec.innerText = 'الأوضاع آمنة تماماً. معدل امتصاص التربة ممتاز والتصريف يستوعب الهطول الحالي دون أي خطورة.';
+            } else if (risk < 50) {
+                badge.innerText = '🟡 متوسط - انتباه';
+                badge.className = 'alert-badge badge-moderate';
+                color = '#eab308';
+                rec.innerText = 'يرجى متابعة التحديثات الجوية. هناك احتمال لتشكل تجمعات مائية في المناطق المنخفضة وتدفق ضئيل بالأودية.';
+            } else if (risk < 75) {
+                badge.innerText = '🟠 مرتفع - تحذير';
+                badge.className = 'alert-badge badge-high';
+                color = '#f97316';
+                rec.innerText = 'تحذير: خطر تشكل سيول مفاجئة! يُنصح بالابتعاد عن مجاري الأودية والمناطق المنخفضة وتجنب قيادة المركبات.';
+            } else {
+                badge.innerText = '🔴 حرج جداً - خطورة عالية';
+                badge.className = 'alert-badge badge-critical';
+                color = '#ef4444';
+                rec.innerText = 'خطر فيضان وشيك وجارف! يجب إخلاء المناطق المنخفضة فوراً والتوجه للأماكن المرتفعة واتباع تعليمات الدفاع المدني.';
+            }
+            arc.style.stroke = color;
+
+            const flowData = [];
+            const capacityData = [];
+            for (let t = 1; t <= 8; t++) {
+                if (t <= duration) {
+                    flowData.push(Math.round(peakFlow * Math.sin((t / duration) * Math.PI)));
+                } else {
+                    flowData.push(Math.round(flowData[flowData.length - 1] * 0.4));
+                }
+                capacityData.push(Math.round(absorption));
+            }
+            hydroChart.data.datasets[0].data = flowData;
+            hydroChart.data.datasets[1].data = capacityData;
+            hydroChart.update();
+        }
+
+        function applyPreset(type) {
+            if (type === 'light') {
+                document.getElementById('rain').value = 15;
+                document.getElementById('duration').value = 2;
+                document.getElementById('soil').value = 30;
+            } else if (type === 'urban') {
+                document.getElementById('rain').value = 65;
+                document.getElementById('duration').value = 4;
+                document.getElementById('soil').value = 75;
+            } else if (type === 'flash') {
+                document.getElementById('rain').value = 140;
+                document.getElementById('duration').value = 6;
+                document.getElementById('soil').value = 90;
+            }
+            updateModel();
+        }
+
+        document.querySelectorAll('input, select').forEach(el => {
+            el.addEventListener('input', updateModel);
+        });
+
+        updateModel();
+    </script>
+</body>
+</html>
